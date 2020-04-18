@@ -51,34 +51,68 @@ but I had to pick one.
 
 =cut
 
+=head1 DESCRIPTION
+
+It should be noted that this is just a chunk of test code
+to start working on the basic ideas.  It will change when
+we figure out all the tools we'll end up using.
+
+=cut
+
 use strict;
 use warnings;
 use English -no_match_vars;
 use Data::Dumper;
 
-use Time::HiRes qw(time sleep alarm);
-
 BEGIN { @INC = ( ".", @INC ); }
 
-use PI3::Log qw(:all);  # auto-import $log_main
+use Time::HiRes qw(time sleep alarm);
+use IPC::Shareable;
+use Try::Tiny;
+use Log::Log4perl;
 
-my $start_time = time();
-my $done = undef;
+my $LOG_CONFIG = "./log4perl.conf";
 
-#my $log_object = PI3::Log->new(undef, {weakref => 1});
-#my $log_main = $log_object->{logger};
-#my $bar_object = PI3::Log->new('bar', {weakref => 1});
-#my $bar = PI3::Log->new('bar')->{logger};
+if( ! -r $LOG_CONFIG ) {
+    open(my $fp, ">", $LOG_CONFIG) or die "Cannot create $LOG_CONFIG: $!";
+    print $fp <<~EOM;
+        log4perl.logger.MAIN = DEBUG, A1
+        log4perl.logger.BOOT = DEBUG, A1
+        log4perl.logger.AUTH = DEBUG, A1
 
-my $log_main = PI3::Log->new()->{logger};
-my $bar = PI3::Log->new('bar')->{logger};
+        log4perl.appender.A1 = Log::Log4perl::Appender::Screen
+        log4perl.appender.A1.stderr = 0
+        log4perl.appender.A1.layout = Log::Log4perl::Layout::PatternLayout
+        log4perl.appender.A1.layout.ConversionPattern = %d{yyyy-MM-dd HH:mm:ss.SSS} %8P %-6c %-6p %16C %05L| %m{indent,chomp}%n
+    EOM
+    close $fp;
+}
 
-$log_main->boot("System Started.");
-$log_main->info("This is a test of\nmulti-line messages, to see if\nit aligns properly.");
-$log_main->info("There are currently " . PI3::Log::count() . " log instances.");
-$bar->boot("A different logger.");
-$bar->auth("Security breach!");
-$log_main->boot("System Halted.");
+Log::Log4perl::init($LOG_CONFIG);
+
+my $log_main = Log::Log4perl->get_logger('MAIN');
+my $log_boot = Log::Log4perl->get_logger('BOOT');
+my $log_auth = Log::Log4perl->get_logger('AUTH');
+
+use PI3::TestServer qw(server_main);
+use PI3::TestClient qw(client_main);
+
+my $kid = undef;
+$| = 1;
+$SIG{CHLD} = "IGNORE";
+$log_boot->info("Main process launching child.");
+if($kid = fork()) {
+    # Parent
+    $log_boot->info("Server ready.");
+    server_main();
+} elsif (defined $kid) {
+    # Child
+    $log_boot->info("Client child ready.");
+    client_main();
+} else {
+    # Failed
+    $log_main->logdie("Failed to fork: $!");
+}
+$log_boot->info("Main process done.");
 
 1;
-

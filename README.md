@@ -66,3 +66,51 @@ in parallel, as a group of services.
 For DBI, POE::Component::EasyDBI looks like a reasonable candidate.  It appears
 to provide non-blocking callback-style queries using the POE style events.
 
+Potential basic flow:
+
+server process will use IPC::Shareable to have a shared message queue
+and Net::Server::PreFork to handle forking servers for each protocol
+used (I3, WEB, CHAT)
+
+server process sets up each Net::Server and a shared hash for each service.
+
+When a client is forked, it will register itself in the shared hash and
+then wait for I/O.  When it gets a message, it will handle it and push any
+results into the shared hash if the server/other-clients need to be
+involved.  It will also be woken up (via signal?) when any outgoing
+data is placed it its hash by the server, so it can respond to it.
+
+Additionally, we'll be using a database for some things, so we need
+a connection pool that all children can use.  This would be more efficient
+than having each child open their own connection, especially if they are
+short lived.
+
+So, the shared hash should have a few fixed things in it.
+
+{
+    service     =>  type of service this data is, "chat", etc...
+    config      =>  configuration data set by the parent for the
+                    children to access.  if changed, they should
+                    be signalled to re-read it.
+                    {
+                        version =>  version serial number, so the clients
+                                    can quickly see if they need to parse
+                                    the rest of the hash or not.
+                        ...
+                    }
+    clients     =>  hash of clients registered, can be empty
+                    client count would be (scalar keys $t->{clients})
+                    {
+                        pid     =>  process ID of child
+                                    this is also the hash key and
+                                    will be used by the parent to
+                                    send signals, or force termination.
+                        input   =>  hash of message packets processed
+                                    by the child and ready for the
+                                    server to handle.
+                        output  =>  hash of message packets from the
+                                    server for the child to handle.
+                        ...
+                    }
+}
+
