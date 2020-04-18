@@ -24,6 +24,9 @@ my $log_boot = Log::Log4perl->get_logger('BOOT');
 my $log_auth = Log::Log4perl->get_logger('AUTH');
 
 sub client_main {
+    $| = 1;
+    $SIG{CHLD} = "IGNORE";
+
     my $start_time = time();
     my $done = undef;
     my $shared_name = 'testing';
@@ -53,7 +56,7 @@ sub client_main {
     $log_main->info("Flavor is " . (defined $data{flavor} ? $data{flavor} : ""));
 
     $log_boot->info("Client Halted.");
+    exit 1;
 }
 
 1;
-

@@ -67,6 +67,7 @@ use Data::Dumper;
 BEGIN { @INC = ( ".", @INC ); }
 
 use Time::HiRes qw(time sleep alarm);
+use POSIX ":sys_wait_h";
 use IPC::Shareable;
 use Try::Tiny;
 use Log::Log4perl;
@@ -97,21 +98,28 @@ my $log_auth = Log::Log4perl->get_logger('AUTH');
 use PI3::TestServer qw(server_main);
 use PI3::TestClient qw(client_main);
 
-my $kid = undef;
+my $server_kid = undef;
+my $client_kid = undef;
 $| = 1;
 $SIG{CHLD} = "IGNORE";
-$log_boot->info("Main process launching child.");
-if($kid = fork()) {
-    # Parent
-    $log_boot->info("Server ready.");
-    server_main();
-} elsif (defined $kid) {
-    # Child
-    $log_boot->info("Client child ready.");
-    client_main();
-} else {
-    # Failed
-    $log_main->logdie("Failed to fork: $!");
+$log_boot->info("Main process launching children.");
+
+$log_main->logdie("Failed to fork: $!") unless defined ($server_kid = fork());
+server_main() if $server_kid == 0;
+$log_main->info("Child $server_kid launched as server.");
+
+$log_main->logdie("Failed to fork: $!") unless defined ($client_kid = fork());
+client_main() if $client_kid == 0;
+$log_main->info("Child $client_kid launched as client.");
+
+$log_main->info("This is a test of\nmulti-line messages, to see if\nit aligns properly.");
+$log_auth->warn("Security breach!");
+
+# Wait until both kids are done
+while((my $death = waitpid(-1, WNOHANG)) > -1) {
+    # Note that if you are IGNORing SIGCHLD, you never get a > 0 response.
+    $log_main->info("Child $death has exited.") if $death > 0;
+    sleep 0.5;
 }
 $log_boot->info("Main process done.");
 

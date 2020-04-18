@@ -24,6 +24,9 @@ my $log_boot = Log::Log4perl->get_logger('BOOT');
 my $log_auth = Log::Log4perl->get_logger('AUTH');
 
 sub server_main {
+    $| = 1;
+    $SIG{CHLD} = "IGNORE";
+
     my $start_time = time();
     my $done = undef;
     my $shared_name = 'testing';
@@ -59,10 +62,8 @@ sub server_main {
 
     sleep 10;
 
-    $log_main->info("This is a test of\nmulti-line messages, to see if\nit aligns properly.");
-    $log_auth->warn("Security breach!");
     $log_boot->info("Server Halted.");
+    exit 1;
 }
 
 1;
-
