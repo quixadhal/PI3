@@ -51,7 +51,7 @@ but I had to pick one.
 
 =cut
 
-=head1 DESCRIPTION
+=head1 NOTICE
 
 It should be noted that this is just a chunk of test code
 to start working on the basic ideas.  It will change when
