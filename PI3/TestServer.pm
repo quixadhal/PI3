@@ -12,6 +12,7 @@ BEGIN { @INC = ( ".", @INC ); }
 use Time::HiRes qw(time sleep alarm);
 use IPC::Shareable;
 use Try::Tiny;
+use DBI;
 use Log::Log4perl;
 
 use Exporter qw(import);
@@ -29,21 +30,30 @@ sub server_main {
 
     my $start_time = time();
     my $done = undef;
-    my $shared_name = 'testing';
+    my $shared_name = 'fart';
     my $share_options = {
-        create      => 1,
+        create      => 0,
         exclusive   => 0,
         mode        => 0666,
-        destroy     => 1,
+        destroy     => 0,
     };
 
     $log_boot->info("Server Started.");
 
     my %data = ();
-    my $shared = tie %data, 'IPC::Shareable', $shared_name, $share_options
-        or die "Cannot tie data: $!";
+    my $shared = undef;
 
-    $log_boot->info("Shared memory structure created.");
+    try {
+        $shared = tie %data, 'IPC::Shareable', $shared_name, $share_options;
+        $log_main->info("Shared memory structure $shared_name connected.");
+    } catch {
+        $log_main->fatal("Failed to connect to shared memory structure $shared_name\n$_");
+        $log_boot->logdie("Server Halted.");
+        exit 1;
+    };
+
+    sleep 0.01 until defined $data{server_pid};
+    $log_main->info("Server $$ PID is ".(defined $data{server_pid}) ? $data{server_pid} : "undefined");
 
     sleep 10;
 

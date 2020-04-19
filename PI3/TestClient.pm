@@ -12,6 +12,7 @@ BEGIN { @INC = ( ".", @INC ); }
 use Time::HiRes qw(time sleep alarm);
 use IPC::Shareable;
 use Try::Tiny;
+use DBI;
 use Log::Log4perl;
 
 use Exporter qw(import);
@@ -29,7 +30,7 @@ sub client_main {
 
     my $start_time = time();
     my $done = undef;
-    my $shared_name = 'testing';
+    my $shared_name = 'fart';
     my $share_options = {
         create      => 0,
         exclusive   => 0,
@@ -44,16 +45,18 @@ sub client_main {
 
     try {
         $shared = tie %data, 'IPC::Shareable', $shared_name, $share_options;
-        $log_main->info("Shared memory structure connected.");
+        $log_main->info("Shared memory structure $shared_name connected.");
     } catch {
-        $log_main->fatal("Failed to connect to shared memory structure\n$_");
+        $log_main->fatal("Failed to connect to shared memory structure $shared_name\n$_");
         $log_boot->logdie("Client Halted.");
         exit 1;
     };
 
-    $log_main->info("Flavor is " . (defined $data{flavor} ? $data{flavor} : ""));
+    $log_main->info("Client $$ PID is ".(defined $data{client_pid}) ? $data{client_pid} : "undefined");
+
+    $log_main->info("Flavor is ".(defined $data{flavor} ? $data{flavor} : "undefined"));
     sleep 15;
-    $log_main->info("Flavor is " . (defined $data{flavor} ? $data{flavor} : ""));
+    $log_main->info("Flavor is ".(defined $data{flavor} ? $data{flavor} : "undefined"));
 
     $log_boot->info("Client Halted.");
     exit 1;
