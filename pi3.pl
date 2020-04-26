@@ -8,7 +8,8 @@ pi3 - An Intermud-3 router, implemented in perl.
 
 =head1 SYNOPSYS
 
-Please see L<PI3::Options> for usage details.
+Simply run this script.  Configuration options are currently
+adjusted via configuration files, which are auto-generated.
 
 =head1 DESCRIPTION
 
@@ -70,12 +71,57 @@ use Time::HiRes qw(time sleep alarm);
 use POSIX ":sys_wait_h";
 use IPC::Shareable;
 use Try::Tiny;
+use Config::Tiny;
 use DBI;
 use Log::Log4perl;
 
 my $LOG_CONFIG = "./log4perl.conf";
+my $DB_CONFIG = "./db.conf";
 
-=head1 SQL
+=head1 CONFIGURATION
+
+=over 4
+
+=item Hard Coded Variables
+
+Yes, there are a couple.  $LOG_CONFIG and $DB_CONFIG, both right above this
+documentation block, control the filenames used for the various configuration
+files, which will be auto-generated with examples if not present.
+
+=cut
+
+=item DB_CONF
+
+To simplify database connections, we expect you to provide the DSN
+used to connect to your database of choice (I use PostgreSQL), and
+the username and password needed for that connection.
+
+Rather than hard-coding it, I decided to require you to make a
+config file, which is in the classic Windows INI format with a
+database section heading, and 3 entries under it, for the DSN,
+username, and password.
+
+If one isn't present, an example will be generate for you to edit.
+
+=cut
+
+if( ! -r $DB_CONFIG ) {
+    open(my $fp, ">", $DB_CONFIG) or die "Cannot create $DB_CONFIG: $!";
+    print $fp <<~EOM;
+        [database]
+            dsn = DBI:Pg:dbname=test
+            username = wiley
+            password = tardis69
+    EOM
+    close $fp;
+}
+
+my $config      = Config::Tiny->read($DB_CONFIG);
+my $db_dsn      = $config->{database}{dsn}      or die "Invalid database source!";
+my $db_user     = $config->{database}{username} or die "Missing database username!";
+my $db_passwd   = $config->{database}{password} or die "Missing database password!";
+
+=item SQL
 
 To use DBI logging, you must first set up a database and a table to
 hold logging data.  Here is the table create statement I used for this
@@ -94,6 +140,17 @@ and other things for real.
 
 =cut
 
+=item LOG4PERL_CONF
+
+For reasons, Log4perl's DBI interface requires configuration to be on disk,
+and so we create an example logging configuration for you to edit, or not.
+
+=back
+
+=cut
+
+# This has to be in an actual physical file for log4perl to be happy with it.
+# Not MY choice, nor is embedding the DBI connection info directly...
 if( ! -r $LOG_CONFIG ) {
     open(my $fp, ">", $LOG_CONFIG) or die "Cannot create $LOG_CONFIG: $!";
     print $fp <<~EOM;
@@ -107,9 +164,9 @@ if( ! -r $LOG_CONFIG ) {
         log4perl.appender.A1.layout.ConversionPattern = %d{yyyy-MM-dd HH:mm:ss.SSS} %8P %-6c %-6p %16C %05L| %m{indent,chomp}%n
 
         log4perl.appender.DBI = Log::Log4perl::Appender::DBI
-        log4perl.appender.DBI.datasource = DBI:Pg:dbname=test
-        log4perl.appender.DBI.username = wiley
-        log4perl.appender.DBI.password = tardis69
+        log4perl.appender.DBI.datasource = $db_dsn
+        log4perl.appender.DBI.username = $db_user
+        log4perl.appender.DBI.password = $db_passwd
         log4perl.appender.DBI.sql = INSERT INTO logfile (pid, category, priority, package, lineno, msg) VALUES (?,?,?,?,?,?)
         log4perl.appender.DBI.params.1 = %P
         log4perl.appender.DBI.params.2 = %c
@@ -128,6 +185,10 @@ Log::Log4perl::init($LOG_CONFIG);
 my $log_main = Log::Log4perl->get_logger('MAIN');
 my $log_boot = Log::Log4perl->get_logger('BOOT');
 my $log_auth = Log::Log4perl->get_logger('AUTH');
+
+$log_boot->info("Logging system intialized.");
+
+exit 1;
 
 # Set up shared memory structure
 my $shared_name = 'fart';
